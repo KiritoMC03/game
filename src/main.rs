@@ -380,79 +380,54 @@ const INDEX_HTML: &str = r#"<!doctype html>
     let currentTitle = null;
 
     async function sendReaction(reaction) {
-      try {
-        await fetch('/api/click', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify({reaction})
-        });
-        const st = document.getElementById('status');
-        st.innerText = '👆 зафиксировано';
-        setTimeout(() => { if (st.innerText === '👆 зафиксировано') st.innerText = ''; }, 1600);
-      } catch (e) {
-        document.getElementById('status').innerText = 'не удалось отправить 😢';
-      }
-    }
-
-    async function loadStateOnce() {
-      const err = document.getElementById('error');
-      try {
-        const resp = await fetch('/api/state', { cache: 'no-store' });
-        if (!resp.ok) throw new Error('bad status ' + resp.status);
-        const data = await resp.json();
-        currentTitle = data.title;
-        document.getElementById('title').innerText = data.title;
-        document.getElementById('desc').innerText = data.description;
-        err.style.display = 'none';
-
-        if (data.shown_result) {
-          document.getElementById('answer-box').style.display = 'block';
-          document.getElementById('answer-text').innerText = data.shown_result.answer;
-          document.getElementById('answer-counts').innerText = data.shown_result.counts.join(', ');
-        }
-      } catch (e) {
-        err.innerText = 'Не удалось получить ситуацию. Попробуем ещё…';
-        err.style.display = 'block';
-      }
+      await fetch('/api/click', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({reaction})
+      });
+      document.getElementById('status').innerText = 'Принято 👍';
     }
 
     async function pollLoop() {
       try {
-        const resp = await fetch('/api/state', { cache: 'no-store' });
-        const data = await resp.json();
-
-        if (data.title !== currentTitle) {
-          currentTitle = data.title;
-          document.getElementById('title').innerText = data.title;
-          document.getElementById('desc').innerText = data.description;
+        // 1. тянем ситуацию
+        const cur = await fetch('/api/current');
+        const curData = await cur.json();
+        if (curData.title !== currentTitle) {
+          currentTitle = curData.title;
+          document.getElementById('title').innerText = curData.title;
+          document.getElementById('desc').innerText = curData.description;
+          // при смене ситуации можно скрыть старый ответ
           document.getElementById('answer-box').style.display = 'none';
-          document.getElementById('error').style.display = 'none';
         }
 
-        if (data.shown_result) {
-          document.getElementById('answer-box').style.display = 'block';
-          document.getElementById('answer-text').innerText = data.shown_result.answer;
-          document.getElementById('answer-counts').innerText = data.shown_result.counts.join(', ');
+        // 2. тянем ответ
+        const res = await fetch('/api/result');
+        const resData = await res.json();
+        const box = document.getElementById('answer-box');
+        if (resData) {
+          box.style.display = 'block';
+          document.getElementById('answer-text').innerText = resData.answer;
+          document.getElementById('answer-counts').innerText = resData.counts.join(', ');
         } else {
-          document.getElementById('answer-box').style.display = 'none';
+          // если админ сбросил/переключил
+          box.style.display = 'none';
         }
 
       } catch (e) {
-        // просто не обновляем, пусть предыдущие данные висят
+        // можно залогать в консоль
+        // console.error(e);
       } finally {
         setTimeout(pollLoop, 1500);
       }
     }
 
-    // сначала один явный запрос
-    loadStateOnce();
-    // потом цикл
+    // старт
     pollLoop();
   </script>
 </body>
 </html>
 "#;
-
 
 // ===================== HTML (админ) =====================
 

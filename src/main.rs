@@ -1,11 +1,19 @@
-use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Mutex}};
+use std::{
+    collections::HashMap,
+    net::SocketAddr,
+    sync::{Arc, Mutex},
+};
 
 use axum::{
     extract::State,
+    response::Html,
     routing::{get, post},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use tokio::net::TcpListener;
+
+// ====== доменные штуки ======
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Reaction {
@@ -29,7 +37,7 @@ impl Reaction {
 struct Situation {
     title: String,
     description: String,
-    // key: (Reaction, Reaction) where order is sorted
+    // ключ: (Reaction, Reaction) — уже отсортирован
     answers: HashMap<(Reaction, Reaction), String>,
 }
 
@@ -37,16 +45,16 @@ struct Situation {
 struct AppState {
     situations: Vec<Situation>,
     current_index: usize,
-    // counts: [lie, delay, freeze]
-    counts: [u64; 3],
+    counts: [u64; 3], // [lie, delay, freeze]
 }
 
 type Shared = Arc<Mutex<AppState>>;
 
+// ====== entrypoint ======
+
 #[tokio::main]
 async fn main() {
     let situations = build_situations();
-
     let state = Arc::new(Mutex::new(AppState {
         situations,
         current_index: 0,
@@ -69,13 +77,14 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-async fn index_page() -> axum::response::Html<&'static str> {
-    // простейший фронт
-    axum::response::Html(INDEX_HTML)
+// ====== handlers ======
+
+async fn index_page() -> Html<&'static str> {
+    Html(INDEX_HTML)
 }
 
-async fn admin_page() -> axum::response::Html<&'static str> {
-    axum::response::Html(ADMIN_HTML)
+async fn admin_page() -> Html<&'static str> {
+    Html(ADMIN_HTML)
 }
 
 #[derive(Serialize)]
@@ -150,6 +159,8 @@ async fn admin_next(State(state): State<Shared>) -> Json<ClickResponse> {
     Json(ClickResponse { ok: true })
 }
 
+// ====== утилиты ======
+
 fn idx_to_reaction(i: usize) -> Reaction {
     match i {
         0 => Reaction::Lie,
@@ -159,7 +170,6 @@ fn idx_to_reaction(i: usize) -> Reaction {
 }
 
 fn ordered_tuple(a: Reaction, b: Reaction) -> (Reaction, Reaction) {
-    // упорядочим по discriminant'у
     if (a as u8) <= (b as u8) {
         (a, b)
     } else {
@@ -168,13 +178,13 @@ fn ordered_tuple(a: Reaction, b: Reaction) -> (Reaction, Reaction) {
 }
 
 fn top_two(counts: &[u64; 3]) -> (Reaction, Reaction) {
-    // найдём индексы двух максимальных
+    // берём два самых кликаемых
     let mut pairs = vec![(counts[0], 0usize), (counts[1], 1usize), (counts[2], 2usize)];
-    pairs.sort_by(|a, b| b.0.cmp(&a.0)); // по убыванию
-    let first = idx_to_reaction(pairs[0].1);
-    let second = idx_to_reaction(pairs[1].1);
-    (first, second)
+    pairs.sort_by(|a, b| b.0.cmp(&a.0));
+    (idx_to_reaction(pairs[0].1), idx_to_reaction(pairs[1].1))
 }
+
+// ====== HTML ======
 
 const INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ru">
@@ -184,8 +194,9 @@ const INDEX_HTML: &str = r#"<!doctype html>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: sans-serif; max-width: 560px; margin: 40px auto; }
-    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; }
-    .box { border: 1px solid #ddd; padding: 16px; border-radius: 8px; }
+    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; width: 100%; cursor: pointer; }
+    .box { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin-bottom: 14px; }
+    #status { color: #4e7; }
   </style>
 </head>
 <body>
@@ -195,8 +206,8 @@ const INDEX_HTML: &str = r#"<!doctype html>
     <p id="desc"></p>
   </div>
   <div>
-    <button onclick="sendReaction('lie')">Врать</button><br/>
-    <button onclick="sendReaction('delay')">Отложить</button><br/>
+    <button onclick="sendReaction('lie')">Врать</button>
+    <button onclick="sendReaction('delay')">Отложить</button>
     <button onclick="sendReaction('freeze')">Заморозить тему</button>
   </div>
   <p id="status"></p>
@@ -208,7 +219,11 @@ const INDEX_HTML: &str = r#"<!doctype html>
       document.getElementById('desc').innerText = data.description;
     }
     async function sendReaction(reaction) {
-      await fetch('/api/click',{method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({reaction})});
+      await fetch('/api/click',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({reaction})
+      });
       document.getElementById('status').innerText = 'Принято 👍';
     }
     loadSituation();
@@ -224,8 +239,8 @@ const ADMIN_HTML: &str = r#"<!doctype html>
   <title>Админ</title>
   <style>
     body { font-family: sans-serif; max-width: 560px; margin: 40px auto; }
-    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; }
-    pre { white-space: pre-wrap; background: #f7f7f7; padding: 10px; }
+    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; cursor: pointer; }
+    pre { white-space: pre-wrap; background: #f7f7f7; padding: 10px; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -238,7 +253,9 @@ const ADMIN_HTML: &str = r#"<!doctype html>
       const r = await fetch('/admin/show');
       const d = await r.json();
       document.getElementById('out').innerText =
-        'Ситуация: ' + d.situation_title + '\n\nОтвет:\n' + d.answer + '\n\nКлики: ' + d.counts.join(', ');
+        'Ситуация: ' + d.situation_title +
+        '\n\nОтвет:\n' + d.answer +
+        '\n\nКлики (Врать, Отложить, Заморозить): ' + d.counts.join(', ');
     }
     async function nextSituation() {
       await fetch('/admin/next', {method:'POST'});
@@ -249,13 +266,14 @@ const ADMIN_HTML: &str = r#"<!doctype html>
 </html>
 "#;
 
-// здесь мы жёстко зашиваем 15 ситуаций из трёх блоков
+// ====== СИТУАЦИИ ======
+
 fn build_situations() -> Vec<Situation> {
     let mut v = Vec::new();
 
-    // =============== БЛОК 1: Разогревочные ===============
+    // ===== БЛОК 1: разогревочные =====
 
-    // 1. Почему стендап опять перенесли?
+    // 1
     v.push(Situation {
         title: "Почему стендап опять перенесли?".to_string(),
         description: "Команда интересуется, почему ежедневная встреча снова уехала по времени.".to_string(),
@@ -266,7 +284,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 2. Почему в таск-трекере опять другие приоритеты?
+    // 2
     v.push(Situation {
         title: "Почему в таск-трекере опять другие приоритеты?".to_string(),
         description: "Разработчики видят, что задачи снова переприоритизировали.".to_string(),
@@ -277,7 +295,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 3. Можно нормальные требования сразу?
+    // 3
     v.push(Situation {
         title: "Можно нормальные требования сразу, а не по кусочкам?".to_string(),
         description: "Команда хочет цельное ТЗ.".to_string(),
@@ -288,7 +306,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 4. Зачем ещё один созвон по тому же вопросу?
+    // 4
     v.push(Situation {
         title: "Зачем ещё один созвон по тому же вопросу?".to_string(),
         description: "Снова приглашение на повтор встречи.".to_string(),
@@ -299,7 +317,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 5. Почему нет нормальной документации?
+    // 5
     v.push(Situation {
         title: "Почему у нас нет нормальной документации?".to_string(),
         description: "Классическая боль по докам.".to_string(),
@@ -310,9 +328,9 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // =============== БЛОК 2: Банальные (про деньги) ===============
+    // ===== БЛОК 2: банальные (про деньги и обещания) =====
 
-    // 6. Когда будет зарплата за этот месяц?
+    // 6
     v.push(Situation {
         title: "Когда будет зарплата за этот месяц?".to_string(),
         description: "Самый ожидаемый вопрос.".to_string(),
@@ -323,7 +341,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 7. Вы говорили, что задержек больше не будет. Что случилось?
+    // 7
     v.push(Situation {
         title: "Вы говорили, что задержек больше не будет. Что случилось?".to_string(),
         description: "Вопрос про доверие к обещаниям.".to_string(),
@@ -334,7 +352,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 8. Будет ли индексация/премии в этом квартале?
+    // 8
     v.push(Situation {
         title: "Будет ли индексация или премии в этом квартале?".to_string(),
         description: "Вопрос про мотивацию.".to_string(),
@@ -345,7 +363,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 9. Почему не сказали заранее про сдвиг?
+    // 9
     v.push(Situation {
         title: "Почему нам не сказали заранее про сдвиг выплат?".to_string(),
         description: "Коммуникация запоздала.".to_string(),
@@ -356,7 +374,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 10. Почему нанимаете людей, если зарплаты задерживаются?
+    // 10
     v.push(Situation {
         title: "Почему вы нанимаете людей, если зарплаты задерживаются?".to_string(),
         description: "Про странный приоритет.".to_string(),
@@ -367,9 +385,9 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // =============== БЛОК 3: Острые ===============
+    // ===== БЛОК 3: острые =====
 
-    // 11. Компания вообще жива?
+    // 11
     v.push(Situation {
         title: "Компания вообще жива? Нас не закрывают?".to_string(),
         description: "Панический вопрос.".to_string(),
@@ -380,7 +398,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 12. Почему у руководства всё ок, а у нас 'сдвиг'?
+    // 12
     v.push(Situation {
         title: "Почему у руководства всё ок, а у нас 'сдвиг выплат'?".to_string(),
         description: "Про справедливость.".to_string(),
@@ -391,7 +409,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 13. Почему 'последний раз' уже третий раз?
+    // 13
     v.push(Situation {
         title: "Почему 'последний раз задержка' уже третий раз?".to_string(),
         description: "Про повторяющиеся обещания.".to_string(),
@@ -402,7 +420,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 14. Почему не показываете цифры?
+    // 14
     v.push(Situation {
         title: "Если всё хорошо, почему вы не показываете цифры?".to_string(),
         description: "Про прозрачность.".to_string(),
@@ -413,7 +431,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 15. Когда всё это закончится?
+    // 15
     v.push(Situation {
         title: "Когда всё это закончится и мы будем получать вовремя?".to_string(),
         description: "Финальный, самый жизненный.".to_string(),
@@ -433,11 +451,8 @@ fn make_answers(
     delay_freeze: &str,
 ) -> HashMap<(Reaction, Reaction), String> {
     let mut m = HashMap::new();
-    // (Врать + Отложить)
     m.insert(ordered_tuple(Reaction::Lie, Reaction::Delay), lie_delay.to_string());
-    // (Врать + Заморозить)
     m.insert(ordered_tuple(Reaction::Lie, Reaction::Freeze), lie_freeze.to_string());
-    // (Отложить + Заморозить)
     m.insert(ordered_tuple(Reaction::Delay, Reaction::Freeze), delay_freeze.to_string());
     m
 }

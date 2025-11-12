@@ -408,6 +408,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
         } else {
           // если админ сбросил/переключил
           box.style.display = 'none';
+          document.getElementById('status').innerText = '';
         }
 
       } catch (e) {

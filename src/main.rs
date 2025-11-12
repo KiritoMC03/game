@@ -13,7 +13,7 @@ use axum::{
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
 
-// ====== доменные штуки ======
+// ===================== Доменные типы =====================
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum Reaction {
@@ -37,7 +37,7 @@ impl Reaction {
 struct Situation {
     title: String,
     description: String,
-    // ключ: (Reaction, Reaction) — уже отсортирован
+    // ключ: (Reaction, Reaction) — отсортирован
     answers: HashMap<(Reaction, Reaction), String>,
 }
 
@@ -60,7 +60,7 @@ struct AppState {
 
 type Shared = Arc<Mutex<AppState>>;
 
-// ====== entrypoint ======
+// ===================== Entry =====================
 
 #[tokio::main]
 async fn main() {
@@ -91,7 +91,7 @@ async fn main() {
     axum::serve(listener, app).await.unwrap();
 }
 
-// ====== handlers ======
+// ===================== Handlers =====================
 
 async fn index_page() -> Html<&'static str> {
     Html(INDEX_HTML)
@@ -145,7 +145,7 @@ async fn post_click(
 async fn admin_show(State(state): State<Shared>) -> Json<ShownResult> {
     let mut st = state.lock().unwrap();
 
-    // сначала считаем всё, что зависит от immutable части
+    // сначала забираем всё неизменяемое
     let situation = &st.situations[st.current_index];
     let (r1, r2) = top_two(&st.counts);
     let key = ordered_tuple(r1, r2);
@@ -157,7 +157,7 @@ async fn admin_show(State(state): State<Shared>) -> Json<ShownResult> {
     let situation_title = situation.title.clone();
     let counts = st.counts;
 
-    // теперь можно мутировать
+    // теперь можно мутировать состояние
     st.result_version += 1;
     let shown = ShownResult {
         situation_title,
@@ -176,7 +176,7 @@ async fn get_result_for_players(State(state): State<Shared>) -> Json<Option<Show
     Json(st.last_result.clone())
 }
 
-// следующая ситуация
+// админ -> следующая ситуация
 async fn admin_next(State(state): State<Shared>) -> Json<ClickResponse> {
     let mut st = state.lock().unwrap();
     st.current_index = (st.current_index + 1) % st.situations.len();
@@ -185,7 +185,7 @@ async fn admin_next(State(state): State<Shared>) -> Json<ClickResponse> {
     Json(ClickResponse { ok: true })
 }
 
-// сброс
+// админ -> сброс
 async fn admin_reset(State(state): State<Shared>) -> Json<ClickResponse> {
     let mut st = state.lock().unwrap();
     st.counts = [0, 0, 0];
@@ -193,7 +193,7 @@ async fn admin_reset(State(state): State<Shared>) -> Json<ClickResponse> {
     Json(ClickResponse { ok: true })
 }
 
-// ====== утилиты ======
+// ===================== Утилиты =====================
 
 fn idx_to_reaction(i: usize) -> Reaction {
     match i {
@@ -217,7 +217,7 @@ fn top_two(counts: &[u64; 3]) -> (Reaction, Reaction) {
     (idx_to_reaction(pairs[0].1), idx_to_reaction(pairs[1].1))
 }
 
-// ====== HTML ======
+// ===================== HTML (клиент) =====================
 
 const INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ru">
@@ -253,47 +253,59 @@ const INDEX_HTML: &str = r#"<!doctype html>
   </div>
 
   <script>
-    async function loadSituation() {
-      const r = await fetch('/api/current');
-      const data = await r.json();
-      document.getElementById('title').innerText = data.title;
-      document.getElementById('desc').innerText = data.description;
-    }
+    let currentTitle = null;
 
     async function sendReaction(reaction) {
-      await fetch('/api/click',{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
+      await fetch('/api/click', {
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
         body: JSON.stringify({reaction})
       });
       document.getElementById('status').innerText = 'Принято 👍';
     }
 
-    async function pollResult() {
+    async function pollLoop() {
       try {
-        const r = await fetch('/api/result');
-        const data = await r.json();
+        // 1. тянем ситуацию
+        const cur = await fetch('/api/current');
+        const curData = await cur.json();
+        if (curData.title !== currentTitle) {
+          currentTitle = curData.title;
+          document.getElementById('title').innerText = curData.title;
+          document.getElementById('desc').innerText = curData.description;
+          // при смене ситуации можно скрыть старый ответ
+          document.getElementById('answer-box').style.display = 'none';
+        }
+
+        // 2. тянем ответ
+        const res = await fetch('/api/result');
+        const resData = await res.json();
         const box = document.getElementById('answer-box');
-        if (data) {
+        if (resData) {
           box.style.display = 'block';
-          document.getElementById('answer-text').innerText = data.answer;
-          document.getElementById('answer-counts').innerText = data.counts.join(', ');
+          document.getElementById('answer-text').innerText = resData.answer;
+          document.getElementById('answer-counts').innerText = resData.counts.join(', ');
         } else {
+          // если админ сбросил/переключил
           box.style.display = 'none';
         }
-      } catch(e) {
-        // молча
+
+      } catch (e) {
+        // можно залогать в консоль
+        // console.error(e);
       } finally {
-        setTimeout(pollResult, 1500);
+        setTimeout(pollLoop, 1500);
       }
     }
 
-    loadSituation();
-    pollResult();
+    // старт
+    pollLoop();
   </script>
 </body>
 </html>
 "#;
+
+// ===================== HTML (админ) =====================
 
 const ADMIN_HTML: &str = r#"<!doctype html>
 <html lang="ru">
@@ -334,7 +346,7 @@ const ADMIN_HTML: &str = r#"<!doctype html>
 </html>
 "#;
 
-// ====== СИТУАЦИИ ======
+// ===================== Ситуации =====================
 
 fn build_situations() -> Vec<Situation> {
     let mut v = Vec::new();

@@ -41,11 +41,22 @@ struct Situation {
     answers: HashMap<(Reaction, Reaction), String>,
 }
 
+#[derive(Clone, Serialize)]
+struct ShownResult {
+    situation_title: String,
+    answer: String,
+    counts: [u64; 3],
+    // можно использовать как версию, чтобы фронт не перерисовывал одно и то же
+    version: u64,
+}
+
 #[derive(Clone)]
 struct AppState {
     situations: Vec<Situation>,
     current_index: usize,
     counts: [u64; 3], // [lie, delay, freeze]
+    last_result: Option<ShownResult>,
+    result_version: u64,
 }
 
 type Shared = Arc<Mutex<AppState>>;
@@ -59,6 +70,8 @@ async fn main() {
         situations,
         current_index: 0,
         counts: [0, 0, 0],
+        last_result: None,
+        result_version: 0,
     }));
 
     let app = Router::new()
@@ -66,8 +79,10 @@ async fn main() {
         .route("/admin", get(admin_page))
         .route("/api/current", get(get_current_situation))
         .route("/api/click", post(post_click))
+        .route("/api/result", get(get_result_for_players))
         .route("/admin/show", get(admin_show))
         .route("/admin/next", post(admin_next))
+        .route("/admin/reset", post(admin_reset))
         .with_state(state);
 
     let addr = SocketAddr::from(([0, 0, 0, 0], 3000));
@@ -127,15 +142,9 @@ async fn post_click(
     Json(ClickResponse { ok: true })
 }
 
-#[derive(Serialize)]
-struct ShowResponse {
-    situation_title: String,
-    answer: String,
-    counts: [u64; 3],
-}
-
-async fn admin_show(State(state): State<Shared>) -> Json<ShowResponse> {
-    let st = state.lock().unwrap();
+// Админ нажал “Показать ответ” — считаем, сохраняем в state и отдаём
+async fn admin_show(State(state): State<Shared>) -> Json<ShownResult> {
+    let mut st = state.lock().unwrap();
     let situation = &st.situations[st.current_index];
     let (r1, r2) = top_two(&st.counts);
     let key = ordered_tuple(r1, r2);
@@ -145,17 +154,41 @@ async fn admin_show(State(state): State<Shared>) -> Json<ShowResponse> {
         .cloned()
         .unwrap_or_else(|| "Ответ не найден для этой комбинации".to_string());
 
-    Json(ShowResponse {
+    st.result_version += 1;
+
+    let shown = ShownResult {
         situation_title: situation.title.clone(),
         answer,
         counts: st.counts,
-    })
+        version: st.result_version,
+    };
+
+    st.last_result = Some(shown.clone());
+
+    Json(shown)
 }
 
+// Игроки периодически спрашивают, есть ли результат
+async fn get_result_for_players(State(state): State<Shared>) -> Json<Option<ShownResult>> {
+    let st = state.lock().unwrap();
+    Json(st.last_result.clone())
+}
+
+// Админ нажал “Дальше” — новая ситуация, обнулили клики и очистили результат
 async fn admin_next(State(state): State<Shared>) -> Json<ClickResponse> {
     let mut st = state.lock().unwrap();
     st.current_index = (st.current_index + 1) % st.situations.len();
     st.counts = [0, 0, 0];
+    st.last_result = None;
+    // можно и версию инкрементнуть, но не обязательно — игроки просто увидят, что результата нет
+    Json(ClickResponse { ok: true })
+}
+
+// Админ нажал “Сброс” — остались на той же ситуации, но обнулили клики и скрыли результат
+async fn admin_reset(State(state): State<Shared>) -> Json<ClickResponse> {
+    let mut st = state.lock().unwrap();
+    st.counts = [0, 0, 0];
+    st.last_result = None;
     Json(ClickResponse { ok: true })
 }
 
@@ -197,6 +230,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
     button { margin: 6px 0; padding: 10px 14px; font-size: 15px; width: 100%; cursor: pointer; }
     .box { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin-bottom: 14px; }
     #status { color: #4e7; }
+    #answer-box { background: #f4f4f4; padding: 12px; border-radius: 8px; display: none; }
   </style>
 </head>
 <body>
@@ -211,6 +245,13 @@ const INDEX_HTML: &str = r#"<!doctype html>
     <button onclick="sendReaction('freeze')">Заморозить тему</button>
   </div>
   <p id="status"></p>
+
+  <div id="answer-box">
+    <h3>Ответ ведущего</h3>
+    <p id="answer-text"></p>
+    <p><b>Клики:</b> <span id="answer-counts"></span></p>
+  </div>
+
   <script>
     async function loadSituation() {
       const r = await fetch('/api/current');
@@ -218,6 +259,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
       document.getElementById('title').innerText = data.title;
       document.getElementById('desc').innerText = data.description;
     }
+
     async function sendReaction(reaction) {
       await fetch('/api/click',{
         method:'POST',
@@ -226,7 +268,28 @@ const INDEX_HTML: &str = r#"<!doctype html>
       });
       document.getElementById('status').innerText = 'Принято 👍';
     }
+
+    async function pollResult() {
+      try {
+        const r = await fetch('/api/result');
+        const data = await r.json();
+        const box = document.getElementById('answer-box');
+        if (data) {
+          box.style.display = 'block';
+          document.getElementById('answer-text').innerText = data.answer;
+          document.getElementById('answer-counts').innerText = data.counts.join(', ');
+        } else {
+          box.style.display = 'none';
+        }
+      } catch(e) {
+        // просто молча
+      } finally {
+        setTimeout(pollResult, 1500);
+      }
+    }
+
     loadSituation();
+    pollResult();
   </script>
 </body>
 </html>
@@ -247,6 +310,7 @@ const ADMIN_HTML: &str = r#"<!doctype html>
   <h1>Админка</h1>
   <button onclick="showAnswer()">Показать ответ</button>
   <button onclick="nextSituation()">Дальше</button>
+  <button onclick="resetCounts()">Сброс</button>
   <pre id="out"></pre>
   <script>
     async function showAnswer() {
@@ -260,6 +324,10 @@ const ADMIN_HTML: &str = r#"<!doctype html>
     async function nextSituation() {
       await fetch('/admin/next', {method:'POST'});
       document.getElementById('out').innerText = 'Переключено на следующую ситуацию, клики сброшены.';
+    }
+    async function resetCounts() {
+      await fetch('/admin/reset', {method:'POST'});
+      document.getElementById('out').innerText = 'Клики и показанный ответ сброшены.';
     }
   </script>
 </body>

@@ -223,87 +223,277 @@ const INDEX_HTML: &str = r#"<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Корпоративный рандомайзер</title>
+  <title>Корпокликер</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: sans-serif; max-width: 560px; margin: 40px auto; }
-    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; width: 100%; cursor: pointer; }
-    .box { border: 1px solid #ddd; padding: 16px; border-radius: 8px; margin-bottom: 14px; }
-    #status { color: #4e7; }
-    #answer-box { background: #f4f4f4; padding: 12px; border-radius: 8px; display: none; }
+    :root {
+      --bg: #0f172a;
+      --panel: rgba(15, 23, 42, 0.45);
+      --card: #111827;
+      --accent: #38bdf8;
+      --accent-soft: rgba(56, 189, 248, 0.12);
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --danger: #f43f5e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #0f172a 0, #020617 60%, #020617 100%);
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--text);
+      display: flex;
+      justify-content: center;
+      padding: 18px;
+    }
+    .wrap {
+      width: min(600px, 100%);
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 14px;
+    }
+    .logo {
+      font-weight: 700;
+      letter-spacing: .04em;
+      font-size: 1.05rem;
+      display: flex;
+      gap: .5rem;
+      align-items: center;
+    }
+    .logo-badge {
+      background: rgba(148, 163, 184, .15);
+      border: 1px solid rgba(148, 163, 184, .3);
+      width: 28px; height: 28px;
+      border-radius: 9999px;
+      display: grid;
+      place-items: center;
+      font-size: .6rem;
+    }
+    .status {
+      font-size: .7rem;
+      color: var(--muted);
+    }
+    .card {
+      background: rgba(2, 6, 23, 0.45);
+      border: 1px solid rgba(148, 163, 184, .12);
+      border-radius: 18px;
+      padding: 16px 16px 10px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 12px 35px rgba(0,0,0,.25);
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      margin: 0 0 6px;
+      font-size: 1.05rem;
+      line-height: 1.3;
+    }
+    .card p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .85rem;
+    }
+    .buttons {
+      display: grid;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .btn {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(148, 163, 184, .15);
+      border-radius: 14px;
+      padding: 10px 14px 10px 12px;
+      display: flex;
+      gap: .6rem;
+      align-items: center;
+      cursor: pointer;
+      transition: transform .06s ease-out, border .06s ease-out, background .06s ease-out;
+    }
+    .btn:hover {
+      border: 1px solid rgba(148, 163, 184, .4);
+      background: rgba(15, 23, 42, 0.85);
+    }
+    .btn:active {
+      transform: scale(.996);
+    }
+    .btn-icon {
+      width: 32px; height: 32px;
+      border-radius: 12px;
+      display: grid;
+      place-items: center;
+      font-size: .9rem;
+      background: rgba(148, 163, 184, .1);
+    }
+    .btn-label {
+      font-weight: 600;
+    }
+    .btn-desc {
+      font-size: .68rem;
+      color: var(--muted);
+    }
+    #status {
+      font-size: .72rem;
+      color: #22c55e;
+      min-height: 1.1rem;
+      margin-left: 2px;
+    }
+    .answer-box {
+      background: rgba(15, 23, 42, 0.3);
+      border: 1px solid rgba(148, 163, 184, 0.05);
+      border-radius: 12px;
+      padding: 9px 11px 10px;
+      margin-top: 9px;
+      display: none;
+      animation: pop .12s ease-out;
+    }
+    .answer-title {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-bottom: 3px;
+      text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .answer-text {
+      font-size: .85rem;
+      line-height: 1.35;
+      margin-bottom: 4px;
+    }
+    .answer-counts {
+      font-size: .6rem;
+      color: var(--muted);
+    }
+    .loading-dot {
+      width: 5px; height: 5px;
+      border-radius: 999px;
+      background: var(--accent);
+      animation: pulse 1s ease-in-out infinite;
+      display: inline-block;
+      margin-right: 4px;
+    }
+    @keyframes pulse {
+      0% { opacity: .2; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.4); }
+      100% { opacity: .2; transform: scale(1); }
+    }
+    @keyframes pop {
+      from { transform: scale(.97); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+    @media (min-width: 520px) {
+      .buttons {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+    }
   </style>
 </head>
 <body>
-  <h1>Корпоративный рандомайзер</h1>
-  <div class="box">
-    <h2 id="title">Загрузка…</h2>
-    <p id="desc"></p>
-  </div>
-  <div>
-    <button onclick="sendReaction('lie')">Врать</button>
-    <button onclick="sendReaction('delay')">Отложить</button>
-    <button onclick="sendReaction('freeze')">Заморозить тему</button>
-  </div>
-  <p id="status"></p>
+  <div class="wrap">
+    <div class="header">
+      <div class="logo">
+        <div class="logo-badge">CF</div>
+        Корпокликер
+      </div>
+      <div class="status">
+        <span class="loading-dot"></span>
+        ждём ведущего
+      </div>
+    </div>
 
-  <div id="answer-box">
-    <h3>Ответ ведущего</h3>
-    <p id="answer-text"></p>
-    <p><b>Клики:</b> <span id="answer-counts"></span></p>
+    <div class="card" id="question-card">
+      <h2 id="title">Загрузка…</h2>
+      <p id="desc">Получаем ситуацию с сервера</p>
+    </div>
+
+    <div class="buttons">
+      <button class="btn" onclick="sendReaction('lie')">
+        <div class="btn-icon">🗯</div>
+        <div>
+          <div class="btn-label">Врать</div>
+          <div class="btn-desc">классика корпоративной обороны</div>
+        </div>
+      </button>
+      <button class="btn" onclick="sendReaction('delay')">
+        <div class="btn-icon">⏱</div>
+        <div>
+          <div class="btn-label">Отложить</div>
+          <div class="btn-desc">сдвинем на чуть-чуть</div>
+        </div>
+      </button>
+      <button class="btn" onclick="sendReaction('freeze')">
+        <div class="btn-icon">🧊</div>
+        <div>
+          <div class="btn-label">Заморозить тему</div>
+          <div class="btn-desc">не сейчас, потом</div>
+        </div>
+      </button>
+    </div>
+
+    <div id="status"></div>
+
+    <div class="answer-box" id="answer-box">
+      <div class="answer-title">Ответ ведущего</div>
+      <div class="answer-text" id="answer-text"></div>
+      <div class="answer-counts">
+        Клики (врать, отложить, заморозить): <span id="answer-counts"></span>
+      </div>
+    </div>
   </div>
 
   <script>
     let currentTitle = null;
 
     async function sendReaction(reaction) {
-      await fetch('/api/click', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({reaction})
-      });
-      document.getElementById('status').innerText = 'Принято 👍';
+      try {
+        await fetch('/api/click', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({reaction})
+        });
+        const st = document.getElementById('status');
+        st.innerText = '👆 зафиксировано';
+        setTimeout(() => { if (st.innerText === '👆 зафиксировано') st.innerText = ''; }, 1600);
+      } catch (e) {
+        document.getElementById('status').innerText = 'не удалось отправить 😢';
+      }
     }
 
     async function pollLoop() {
       try {
-        // 1. тянем ситуацию
-        const cur = await fetch('/api/current');
-        const curData = await cur.json();
-        if (curData.title !== currentTitle) {
-          currentTitle = curData.title;
-          document.getElementById('title').innerText = curData.title;
-          document.getElementById('desc').innerText = curData.description;
-          // при смене ситуации можно скрыть старый ответ
+        const resp = await fetch('/api/state', { cache: 'no-store' });
+        const data = await resp.json();
+
+        if (data.title !== currentTitle) {
+          currentTitle = data.title;
+          document.getElementById('title').innerText = data.title;
+          document.getElementById('desc').innerText = data.description;
           document.getElementById('answer-box').style.display = 'none';
         }
 
-        // 2. тянем ответ
-        const res = await fetch('/api/result');
-        const resData = await res.json();
-        const box = document.getElementById('answer-box');
-        if (resData) {
-          box.style.display = 'block';
-          document.getElementById('answer-text').innerText = resData.answer;
-          document.getElementById('answer-counts').innerText = resData.counts.join(', ');
+        if (data.shown_result) {
+          document.getElementById('answer-box').style.display = 'block';
+          document.getElementById('answer-text').innerText = data.shown_result.answer;
+          document.getElementById('answer-counts').innerText = data.shown_result.counts.join(', ');
         } else {
-          // если админ сбросил/переключил
-          box.style.display = 'none';
+          // можно не скрывать, если хочешь чтобы старый ответ висел
+          document.getElementById('answer-box').style.display = 'none';
         }
 
       } catch (e) {
-        // можно залогать в консоль
-        // console.error(e);
+        // молчим
       } finally {
         setTimeout(pollLoop, 1500);
       }
     }
 
-    // старт
     pollLoop();
   </script>
 </body>
 </html>
 "#;
+
 
 // ===================== HTML (админ) =====================
 
@@ -311,19 +501,58 @@ const ADMIN_HTML: &str = r#"<!doctype html>
 <html lang="ru">
 <head>
   <meta charset="utf-8" />
-  <title>Админ</title>
+  <title>Админ — Корпокликер</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
-    body { font-family: sans-serif; max-width: 560px; margin: 40px auto; }
-    button { margin: 6px 0; padding: 10px 14px; font-size: 15px; cursor: pointer; }
-    pre { white-space: pre-wrap; background: #f7f7f7; padding: 10px; border-radius: 4px; }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      max-width: 620px;
+      margin: 28px auto;
+      padding: 0 14px 30px;
+    }
+    h1 { font-size: 1.1rem; margin-bottom: 10px; }
+    .panel {
+      background: rgba(15, 23, 42, 0.35);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 16px;
+      padding: 14px 12px 10px;
+      backdrop-filter: blur(10px);
+    }
+    button {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid rgba(148, 163, 184, 0.25);
+      border-radius: 999px;
+      padding: 7px 15px;
+      font-size: .8rem;
+      color: #e2e8f0;
+      cursor: pointer;
+      margin-right: 6px;
+      margin-bottom: 6px;
+      transition: background .08s ease-out;
+    }
+    button:hover { background: rgba(15, 23, 42, 1); }
+    pre {
+      white-space: pre-wrap;
+      background: rgba(2,6,23,.25);
+      border: 1px solid rgba(148,163,184,.05);
+      padding: 10px;
+      border-radius: 10px;
+      margin-top: 10px;
+      font-size: .75rem;
+    }
   </style>
 </head>
 <body>
-  <h1>Админка</h1>
-  <button onclick="showAnswer()">Показать ответ</button>
-  <button onclick="nextSituation()">Дальше</button>
-  <button onclick="resetCounts()">Сброс</button>
-  <pre id="out"></pre>
+  <h1>Админ — Корпокликер</h1>
+  <div class="panel">
+    <button onclick="showAnswer()">Показать ответ</button>
+    <button onclick="nextSituation()">Дальше</button>
+    <button onclick="resetCounts()">Сброс</button>
+    <pre id="out">Нажми “Показать ответ”, чтобы отдать его игрокам</pre>
+  </div>
+
   <script>
     async function showAnswer() {
       const r = await fetch('/admin/show');

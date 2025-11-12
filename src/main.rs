@@ -231,10 +231,8 @@ const INDEX_HTML: &str = r#"<!doctype html>
       --panel: rgba(15, 23, 42, 0.45);
       --card: #111827;
       --accent: #38bdf8;
-      --accent-soft: rgba(56, 189, 248, 0.12);
       --text: #e2e8f0;
       --muted: #94a3b8;
-      --danger: #f43f5e;
     }
     * { box-sizing: border-box; }
     body {
@@ -247,35 +245,26 @@ const INDEX_HTML: &str = r#"<!doctype html>
       justify-content: center;
       padding: 18px;
     }
-    .wrap {
-      width: min(600px, 100%);
-    }
+    .wrap { width: min(600px, 100%); }
     .header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 14px;
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
     }
-    .logo {
-      font-weight: 700;
-      letter-spacing: .04em;
-      font-size: 1.05rem;
-      display: flex;
-      gap: .5rem;
-      align-items: center;
-    }
+    .logo { font-weight: 700; display: flex; gap: .5rem; align-items: center; }
     .logo-badge {
       background: rgba(148, 163, 184, .15);
       border: 1px solid rgba(148, 163, 184, .3);
-      width: 28px; height: 28px;
-      border-radius: 9999px;
-      display: grid;
-      place-items: center;
-      font-size: .6rem;
+      width: 28px; height: 28px; border-radius: 999px;
+      display: grid; place-items: center; font-size: .6rem;
     }
-    .status {
-      font-size: .7rem;
-      color: var(--muted);
+    .status { font-size: .7rem; color: var(--muted); display: flex; gap: .4rem; align-items: center; }
+    .dot {
+      width: 5px; height: 5px; border-radius: 999px; background: var(--accent);
+      animation: pulse 1s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0% { opacity: .2; transform: scale(1); }
+      50% { opacity: 1; transform: scale(1.4); }
+      100% { opacity: .2; transform: scale(1); }
     }
     .card {
       background: rgba(2, 6, 23, 0.45);
@@ -283,63 +272,29 @@ const INDEX_HTML: &str = r#"<!doctype html>
       border-radius: 18px;
       padding: 16px 16px 10px;
       backdrop-filter: blur(10px);
-      box-shadow: 0 12px 35px rgba(0,0,0,.25);
       margin-bottom: 16px;
     }
-    .card h2 {
-      margin: 0 0 6px;
-      font-size: 1.05rem;
-      line-height: 1.3;
-    }
-    .card p {
-      margin: 0;
-      color: var(--muted);
-      font-size: .85rem;
-    }
-    .buttons {
-      display: grid;
-      gap: 10px;
-      margin-bottom: 8px;
-    }
+    .card h2 { margin: 0 0 6px; font-size: 1.05rem; }
+    .card p { margin: 0; color: var(--muted); font-size: .85rem; }
+    .buttons { display: grid; gap: 10px; margin-bottom: 8px; }
     .btn {
       background: rgba(15, 23, 42, 0.5);
       border: 1px solid rgba(148, 163, 184, .15);
       border-radius: 14px;
       padding: 10px 14px 10px 12px;
-      display: flex;
-      gap: .6rem;
-      align-items: center;
+      display: flex; gap: .6rem; align-items: center;
       cursor: pointer;
       transition: transform .06s ease-out, border .06s ease-out, background .06s ease-out;
     }
-    .btn:hover {
-      border: 1px solid rgba(148, 163, 184, .4);
-      background: rgba(15, 23, 42, 0.85);
-    }
-    .btn:active {
-      transform: scale(.996);
-    }
+    .btn:hover { border: 1px solid rgba(148, 163, 184, .4); background: rgba(15, 23, 42, 0.85); }
+    .btn:active { transform: scale(.996); }
     .btn-icon {
-      width: 32px; height: 32px;
-      border-radius: 12px;
-      display: grid;
-      place-items: center;
-      font-size: .9rem;
-      background: rgba(148, 163, 184, .1);
+      width: 32px; height: 32px; border-radius: 12px; display: grid; place-items: center;
+      background: rgba(148, 163, 184, .1); font-size: .9rem;
     }
-    .btn-label {
-      font-weight: 600;
-    }
-    .btn-desc {
-      font-size: .68rem;
-      color: var(--muted);
-    }
-    #status {
-      font-size: .72rem;
-      color: #22c55e;
-      min-height: 1.1rem;
-      margin-left: 2px;
-    }
+    .btn-label { font-weight: 600; }
+    .btn-desc { font-size: .68rem; color: var(--muted); }
+    #status { font-size: .72rem; color: #22c55e; min-height: 1.1rem; margin-left: 2px; }
     .answer-box {
       background: rgba(15, 23, 42, 0.3);
       border: 1px solid rgba(148, 163, 184, 0.05);
@@ -347,7 +302,6 @@ const INDEX_HTML: &str = r#"<!doctype html>
       padding: 9px 11px 10px;
       margin-top: 9px;
       display: none;
-      animation: pop .12s ease-out;
     }
     .answer-title {
       font-size: .72rem;
@@ -356,36 +310,15 @@ const INDEX_HTML: &str = r#"<!doctype html>
       text-transform: uppercase;
       letter-spacing: .03em;
     }
-    .answer-text {
-      font-size: .85rem;
-      line-height: 1.35;
-      margin-bottom: 4px;
-    }
-    .answer-counts {
-      font-size: .6rem;
-      color: var(--muted);
-    }
-    .loading-dot {
-      width: 5px; height: 5px;
-      border-radius: 999px;
-      background: var(--accent);
-      animation: pulse 1s ease-in-out infinite;
-      display: inline-block;
-      margin-right: 4px;
-    }
-    @keyframes pulse {
-      0% { opacity: .2; transform: scale(1); }
-      50% { opacity: 1; transform: scale(1.4); }
-      100% { opacity: .2; transform: scale(1); }
-    }
-    @keyframes pop {
-      from { transform: scale(.97); opacity: 0; }
-      to { transform: scale(1); opacity: 1; }
+    .answer-text { font-size: .85rem; margin-bottom: 4px; }
+    .answer-counts { font-size: .6rem; color: var(--muted); }
+    .error {
+      color: #f43f5e;
+      font-size: .72rem;
+      margin-top: 6px;
     }
     @media (min-width: 520px) {
-      .buttons {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
-      }
+      .buttons { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
   </style>
 </head>
@@ -396,8 +329,8 @@ const INDEX_HTML: &str = r#"<!doctype html>
         <div class="logo-badge">CF</div>
         Корпокликер
       </div>
-      <div class="status">
-        <span class="loading-dot"></span>
+      <div class="status" id="top-status">
+        <div class="dot"></div>
         ждём ведущего
       </div>
     </div>
@@ -405,6 +338,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
     <div class="card" id="question-card">
       <h2 id="title">Загрузка…</h2>
       <p id="desc">Получаем ситуацию с сервера</p>
+      <p id="error" class="error" style="display:none;"></p>
     </div>
 
     <div class="buttons">
@@ -460,6 +394,28 @@ const INDEX_HTML: &str = r#"<!doctype html>
       }
     }
 
+    async function loadStateOnce() {
+      const err = document.getElementById('error');
+      try {
+        const resp = await fetch('/api/state', { cache: 'no-store' });
+        if (!resp.ok) throw new Error('bad status ' + resp.status);
+        const data = await resp.json();
+        currentTitle = data.title;
+        document.getElementById('title').innerText = data.title;
+        document.getElementById('desc').innerText = data.description;
+        err.style.display = 'none';
+
+        if (data.shown_result) {
+          document.getElementById('answer-box').style.display = 'block';
+          document.getElementById('answer-text').innerText = data.shown_result.answer;
+          document.getElementById('answer-counts').innerText = data.shown_result.counts.join(', ');
+        }
+      } catch (e) {
+        err.innerText = 'Не удалось получить ситуацию. Попробуем ещё…';
+        err.style.display = 'block';
+      }
+    }
+
     async function pollLoop() {
       try {
         const resp = await fetch('/api/state', { cache: 'no-store' });
@@ -470,6 +426,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
           document.getElementById('title').innerText = data.title;
           document.getElementById('desc').innerText = data.description;
           document.getElementById('answer-box').style.display = 'none';
+          document.getElementById('error').style.display = 'none';
         }
 
         if (data.shown_result) {
@@ -477,17 +434,19 @@ const INDEX_HTML: &str = r#"<!doctype html>
           document.getElementById('answer-text').innerText = data.shown_result.answer;
           document.getElementById('answer-counts').innerText = data.shown_result.counts.join(', ');
         } else {
-          // можно не скрывать, если хочешь чтобы старый ответ висел
           document.getElementById('answer-box').style.display = 'none';
         }
 
       } catch (e) {
-        // молчим
+        // просто не обновляем, пусть предыдущие данные висят
       } finally {
         setTimeout(pollLoop, 1500);
       }
     }
 
+    // сначала один явный запрос
+    loadStateOnce();
+    // потом цикл
     pollLoop();
   </script>
 </body>

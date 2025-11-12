@@ -46,7 +46,6 @@ struct ShownResult {
     situation_title: String,
     answer: String,
     counts: [u64; 3],
-    // можно использовать как версию, чтобы фронт не перерисовывал одно и то же
     version: u64,
 }
 
@@ -142,9 +141,11 @@ async fn post_click(
     Json(ClickResponse { ok: true })
 }
 
-// Админ нажал “Показать ответ” — считаем, сохраняем в state и отдаём
+// Админ нажал “Показать ответ”
 async fn admin_show(State(state): State<Shared>) -> Json<ShownResult> {
     let mut st = state.lock().unwrap();
+
+    // сначала считаем всё, что зависит от immutable части
     let situation = &st.situations[st.current_index];
     let (r1, r2) = top_two(&st.counts);
     let key = ordered_tuple(r1, r2);
@@ -153,38 +154,38 @@ async fn admin_show(State(state): State<Shared>) -> Json<ShownResult> {
         .get(&key)
         .cloned()
         .unwrap_or_else(|| "Ответ не найден для этой комбинации".to_string());
+    let situation_title = situation.title.clone();
+    let counts = st.counts;
 
+    // теперь можно мутировать
     st.result_version += 1;
-
     let shown = ShownResult {
-        situation_title: situation.title.clone(),
+        situation_title,
         answer,
-        counts: st.counts,
+        counts,
         version: st.result_version,
     };
-
     st.last_result = Some(shown.clone());
 
     Json(shown)
 }
 
-// Игроки периодически спрашивают, есть ли результат
+// игроки опрашивают результат
 async fn get_result_for_players(State(state): State<Shared>) -> Json<Option<ShownResult>> {
     let st = state.lock().unwrap();
     Json(st.last_result.clone())
 }
 
-// Админ нажал “Дальше” — новая ситуация, обнулили клики и очистили результат
+// следующая ситуация
 async fn admin_next(State(state): State<Shared>) -> Json<ClickResponse> {
     let mut st = state.lock().unwrap();
     st.current_index = (st.current_index + 1) % st.situations.len();
     st.counts = [0, 0, 0];
     st.last_result = None;
-    // можно и версию инкрементнуть, но не обязательно — игроки просто увидят, что результата нет
     Json(ClickResponse { ok: true })
 }
 
-// Админ нажал “Сброс” — остались на той же ситуации, но обнулили клики и скрыли результат
+// сброс
 async fn admin_reset(State(state): State<Shared>) -> Json<ClickResponse> {
     let mut st = state.lock().unwrap();
     st.counts = [0, 0, 0];
@@ -211,7 +212,6 @@ fn ordered_tuple(a: Reaction, b: Reaction) -> (Reaction, Reaction) {
 }
 
 fn top_two(counts: &[u64; 3]) -> (Reaction, Reaction) {
-    // берём два самых кликаемых
     let mut pairs = vec![(counts[0], 0usize), (counts[1], 1usize), (counts[2], 2usize)];
     pairs.sort_by(|a, b| b.0.cmp(&a.0));
     (idx_to_reaction(pairs[0].1), idx_to_reaction(pairs[1].1))
@@ -282,7 +282,7 @@ const INDEX_HTML: &str = r#"<!doctype html>
           box.style.display = 'none';
         }
       } catch(e) {
-        // просто молча
+        // молча
       } finally {
         setTimeout(pollResult, 1500);
       }
@@ -340,8 +340,6 @@ fn build_situations() -> Vec<Situation> {
     let mut v = Vec::new();
 
     // ===== БЛОК 1: разогревочные =====
-
-    // 1
     v.push(Situation {
         title: "Почему стендап опять перенесли?".to_string(),
         description: "Команда интересуется, почему ежедневная встреча снова уехала по времени.".to_string(),
@@ -352,7 +350,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 2
     v.push(Situation {
         title: "Почему в таск-трекере опять другие приоритеты?".to_string(),
         description: "Разработчики видят, что задачи снова переприоритизировали.".to_string(),
@@ -363,7 +360,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 3
     v.push(Situation {
         title: "Можно нормальные требования сразу, а не по кусочкам?".to_string(),
         description: "Команда хочет цельное ТЗ.".to_string(),
@@ -374,7 +370,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 4
     v.push(Situation {
         title: "Зачем ещё один созвон по тому же вопросу?".to_string(),
         description: "Снова приглашение на повтор встречи.".to_string(),
@@ -385,7 +380,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 5
     v.push(Situation {
         title: "Почему у нас нет нормальной документации?".to_string(),
         description: "Классическая боль по докам.".to_string(),
@@ -396,9 +390,7 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // ===== БЛОК 2: банальные (про деньги и обещания) =====
-
-    // 6
+    // ===== БЛОК 2: банальные =====
     v.push(Situation {
         title: "Когда будет зарплата за этот месяц?".to_string(),
         description: "Самый ожидаемый вопрос.".to_string(),
@@ -409,7 +401,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 7
     v.push(Situation {
         title: "Вы говорили, что задержек больше не будет. Что случилось?".to_string(),
         description: "Вопрос про доверие к обещаниям.".to_string(),
@@ -420,7 +411,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 8
     v.push(Situation {
         title: "Будет ли индексация или премии в этом квартале?".to_string(),
         description: "Вопрос про мотивацию.".to_string(),
@@ -431,7 +421,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 9
     v.push(Situation {
         title: "Почему нам не сказали заранее про сдвиг выплат?".to_string(),
         description: "Коммуникация запоздала.".to_string(),
@@ -442,7 +431,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 10
     v.push(Situation {
         title: "Почему вы нанимаете людей, если зарплаты задерживаются?".to_string(),
         description: "Про странный приоритет.".to_string(),
@@ -454,8 +442,6 @@ fn build_situations() -> Vec<Situation> {
     });
 
     // ===== БЛОК 3: острые =====
-
-    // 11
     v.push(Situation {
         title: "Компания вообще жива? Нас не закрывают?".to_string(),
         description: "Панический вопрос.".to_string(),
@@ -466,7 +452,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 12
     v.push(Situation {
         title: "Почему у руководства всё ок, а у нас 'сдвиг выплат'?".to_string(),
         description: "Про справедливость.".to_string(),
@@ -477,7 +462,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 13
     v.push(Situation {
         title: "Почему 'последний раз задержка' уже третий раз?".to_string(),
         description: "Про повторяющиеся обещания.".to_string(),
@@ -488,7 +472,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 14
     v.push(Situation {
         title: "Если всё хорошо, почему вы не показываете цифры?".to_string(),
         description: "Про прозрачность.".to_string(),
@@ -499,7 +482,6 @@ fn build_situations() -> Vec<Situation> {
         ),
     });
 
-    // 15
     v.push(Situation {
         title: "Когда всё это закончится и мы будем получать вовремя?".to_string(),
         description: "Финальный, самый жизненный.".to_string(),
